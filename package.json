@@ -5,7 +5,7 @@
   "version": "0.1.18",
   "icon": "media/war3-rect-edit.png",
   "publisher": "local",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Wang123456147/war3-rect-edit-vscode.git"
