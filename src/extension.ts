@@ -40,7 +40,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(CONFIGURE_COMMAND, async () => {
       await vscode.commands.executeCommand(
         'workbench.action.openSettings',
-        '@ext:local.war3-rect-edit'
+        '@ext:dogeechou.war3-rect-edit'
       );
     })
   );

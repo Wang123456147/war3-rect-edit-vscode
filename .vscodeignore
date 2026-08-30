@@ -5,6 +5,8 @@ scripts/**
 node_modules/**
 dist/roundtrip-test.cjs
 dist/harness-server.cjs
+dist/streaming-mpq-diagnostic.cjs
+dist/blp-diagnostic/**
 **/*.map
 *.code-workspace
 package-lock.json
