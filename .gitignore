@@ -1,0 +1,9 @@
+dist/
+node_modules/
+*.vsix
+*.log
+*.code-workspace
+.vscode/
+.war3tool/
+.env
+.env.*

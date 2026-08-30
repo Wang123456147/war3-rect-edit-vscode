@@ -1,0 +1,94 @@
+{
+  "name": "war3-rect-edit",
+  "displayName": "War3 Rect Edit",
+  "description": "在 VS Code 中可视化查看魔兽争霸 III 地形、编辑 W3R 区域并管理逻辑点。",
+  "version": "0.1.18",
+  "icon": "media/war3-rect-edit.png",
+  "publisher": "local",
+  "license": "GPL-3.0-only",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:war3MapTools.openTerrain",
+    "onCommand:war3MapTools.configureWarcraftPath",
+    "onCustomEditor:war3MapTools.lniMap"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "war3MapTools.lniMap",
+        "displayName": "War3 LNI 地形与区域",
+        "selector": [
+          {
+            "filenamePattern": "**/.w3x"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "war3MapTools.openTerrain",
+        "title": "War3 Map: 打开地形与区域编辑器"
+      },
+      {
+        "command": "war3MapTools.configureWarcraftPath",
+        "title": "War3 Map: 打开设置"
+      }
+    ],
+    "configuration": {
+      "title": "War3 Map Tools",
+      "properties": {
+        "war3MapTools.warcraftPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "魔兽争霸 III 安装目录。留空时自动读取 Windows 注册表中的 Warcraft III InstallPath/GamePath。"
+        },
+        "war3MapTools.luaExportPath": {
+          "type": "string",
+          "default": ".war3tool/points.lua",
+          "scope": "resource",
+          "description": "点位 Lua 的导出文件路径。相对路径基于当前 LNI 地图根目录，亦可填写绝对路径。"
+        },
+        "war3MapTools.textEncoding": {
+          "type": "string",
+          "enum": [
+            "gbk",
+            "utf8"
+          ],
+          "default": "gbk",
+          "scope": "resource",
+          "description": "war3map.w3r 中区域名称和环境音字符串的编码。经典中文地图通常使用 GBK。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs",
+    "harness": "esbuild src/test/harness-server.ts --bundle --platform=node --format=cjs --outfile=dist/harness-server.cjs && node dist/harness-server.cjs",
+    "package": "npm run typecheck && npm run test && npm run compile && vsce package --no-dependencies --allow-missing-repository"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.0",
+    "mdx-m3-viewer": "^5.12.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/three": "^0.180.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  }
+}

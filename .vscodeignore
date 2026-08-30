@@ -1,0 +1,12 @@
+.vscode/**
+.gitignore
+src/**
+scripts/**
+node_modules/**
+dist/roundtrip-test.cjs
+dist/harness-server.cjs
+**/*.map
+*.code-workspace
+package-lock.json
+tsconfig.json
+esbuild.mjs
