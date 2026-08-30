@@ -6,6 +6,14 @@
   "icon": "media/war3-rect-edit.png",
   "publisher": "local",
   "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wang123456147/war3-rect-edit-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Wang123456147/war3-rect-edit-vscode/issues"
+  },
+  "homepage": "https://github.com/Wang123456147/war3-rect-edit-vscode#readme",
   "engines": {
     "vscode": "^1.100.0"
   },
