@@ -30,8 +30,9 @@ export function activate(context: vscode.ExtensionContext): void {
         const luaExportPath = configuration.get<string>('luaExportPath', '.war3tool/points.lua');
         await TerrainPanel.show(
           context.extensionUri,
-          new MapDocument(root, encoding, luaExportPath),
-          warcraftPath
+          new MapDocument(root, encoding, luaExportPath, workspaceRootFor(root)),
+          warcraftPath,
+          vscode.Uri.file(root)
         );
       } catch (error) {
         await vscode.window.showErrorMessage(errorMessage(error));
@@ -86,4 +87,8 @@ async function chooseMapRoot(): Promise<string | undefined> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function workspaceRootFor(mapRoot: string): string {
+  return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(mapRoot))?.uri.fsPath ?? mapRoot;
 }

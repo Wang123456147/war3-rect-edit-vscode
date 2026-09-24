@@ -57,6 +57,30 @@ export interface PointFileData {
   points: ScriptPoint[];
 }
 
+/** `none` keeps the offset direction, the other two flip one world axis. */
+export type InstanceMirrorAxis = 'none' | 'horizontal' | 'vertical';
+
+/**
+ * One instance link written to `instances.json`.
+ *
+ * Only the topology is persisted. The affine offset that ties the two entities
+ * together is re-derived from their current coordinates on load, so
+ * `points.json` and `war3map.w3r` stay the single source of truth for
+ * positions and this file never has to be rewritten when something moves.
+ * `source`/`target` use the same `point:<id>` / `region:<index>` keys the
+ * editor holds in memory.
+ */
+export interface InstanceLinkData {
+  source: string;
+  target: string;
+  axis: InstanceMirrorAxis;
+}
+
+export interface InstanceFileData {
+  version: 1;
+  links: InstanceLinkData[];
+}
+
 export interface MapBinaryFile {
   name: string;
   base64: string;
@@ -67,6 +91,7 @@ export interface MapDocumentData {
   terrain: TerrainData;
   regionFile: RegionFileData;
   points: ScriptPoint[];
+  instanceLinks: InstanceLinkData[];
   warcraftPath: string;
   mapFiles: MapBinaryFile[];
   doodadPlacementCount: number;

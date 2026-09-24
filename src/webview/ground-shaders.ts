@@ -14,13 +14,27 @@ attribute vec4 a_variations;
 varying vec4 v_tilesets;
 varying vec2 v_uv[4];
 varying float v_baseIncluded;
+varying float v_boundary;
 
 vec2 getCell(float variation) {
+  // The high bit of each variation byte carries the W3E boundary flag.
+  variation = mod(variation, 128.0);
   if (variation < 16.0) {
     return vec2(mod(variation, 4.0), floor(variation / 4.0));
   }
   variation -= 16.0;
   return vec2(4.0 + mod(variation, 4.0), floor(variation / 4.0));
+}
+
+float boundaryForPosition(vec2 position) {
+  if (position.x < 0.5) {
+    return position.y < 0.5
+      ? step(128.0, a_variations[0])
+      : step(128.0, a_variations[2]);
+  }
+  return position.y < 0.5
+    ? step(128.0, a_variations[1])
+    : step(128.0, a_variations[3]);
 }
 
 bool isExtended(float texture) {
@@ -70,6 +84,7 @@ void main() {
   if (textures[0] > 0.0 || textures[1] > 0.0 || textures[2] > 0.0 || textures[3] > 0.0) {
     v_tilesets = textures;
     v_baseIncluded = textures[0] > 0.5 ? 1.0 : 0.0;
+    v_boundary = boundaryForPosition(a_position);
     v_uv[0] = getUV(a_position, textures[0], a_variations[0]);
     v_uv[1] = getUV(a_position, textures[1], a_variations[1]);
     v_uv[2] = getUV(a_position, textures[2], a_variations[2]);
@@ -82,6 +97,7 @@ void main() {
   } else {
     v_tilesets = vec4(0.0);
     v_baseIncluded = 0.0;
+    v_boundary = 0.0;
     v_uv[0] = vec2(0.0);
     v_uv[1] = vec2(0.0);
     v_uv[2] = vec2(0.0);
@@ -103,6 +119,7 @@ uniform sampler2D u_tilesets[15];
 varying vec4 v_tilesets;
 varying vec2 v_uv[4];
 varying float v_baseIncluded;
+varying float v_boundary;
 
 vec4 sampleTileset(float tileset, vec2 uv) {
   int index = int(tileset - 0.6);
@@ -154,6 +171,7 @@ void main() {
   addLayer(color, v_tilesets[1], v_uv[1]);
   addLayer(color, v_tilesets[2], v_uv[2]);
   addLayer(color, v_tilesets[3], v_uv[3]);
+  color.rgb = mix(color.rgb, vec3(0.0), clamp(v_boundary, 0.0, 1.0));
   gl_FragColor = color;
 }
 `;

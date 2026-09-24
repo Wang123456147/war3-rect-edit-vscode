@@ -1,7 +1,7 @@
 export interface TerrainTextureMap {
   columns: number;
   rows: number;
-  corners: Array<Array<{ groundVariation: number }>>;
+  corners: Array<Array<{ groundVariation: number; boundary?: number | boolean }>>;
   isCliff(column: number, row: number): boolean;
   cornerTexture(column: number, row: number): number;
   getVariation(groundTexture: number, variation: number): number;
@@ -80,4 +80,24 @@ function writeTileTextureLayers(
     textureBuffer[offset + 1 + layer] = texture + 1;
     variationBuffer[offset + 1 + layer] = bitset;
   }
+
+  // The W3E boundary flag is stored per corner, while the renderer exposes
+  // four variation bytes per terrain cell. Keep the normal variation in the
+  // low seven bits and use the high bit of each byte for the matching corner.
+  const boundaryMask = [
+    isBoundaryCorner(map, column, row),
+    isBoundaryCorner(map, column + 1, row),
+    isBoundaryCorner(map, column, row + 1),
+    isBoundaryCorner(map, column + 1, row + 1)
+  ];
+  for (let corner = 0; corner < boundaryMask.length; corner += 1) {
+    if (boundaryMask[corner]) {
+      variationBuffer[offset + corner] = variationBuffer[offset + corner]! | 0x80;
+    }
+  }
+}
+
+function isBoundaryCorner(map: TerrainTextureMap, column: number, row: number): boolean {
+  const corner = map.corners[row]?.[column];
+  return corner !== undefined && Number(corner.boundary ?? 0) !== 0;
 }

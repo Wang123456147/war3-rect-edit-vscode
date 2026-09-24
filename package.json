@@ -2,7 +2,7 @@
   "name": "war3-rect-edit",
   "displayName": "War3 Rect Edit",
   "description": "在 VS Code 中可视化查看魔兽争霸 III 地形、编辑 W3R 区域并管理逻辑点。",
-  "version": "0.1.19",
+  "version": "0.1.23",
   "icon": "media/war3-rect-edit.png",
   "publisher": "dogeechou",
   "license": "MIT",

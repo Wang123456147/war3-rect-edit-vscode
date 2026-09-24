@@ -195,6 +195,49 @@ button.primary:hover {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
+.tool-settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
+
+.tool-settings-row .region-tool-button {
+  flex: none;
+  margin: 0;
+}
+
+.snap-settings {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 3px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.snap-settings label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.snap-settings input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.snap-settings input[type='number'] {
+  width: 58px;
+  height: 24px;
+  padding: 2px 5px;
+}
+
 .current-region {
   min-height: 24px;
   overflow: hidden;
@@ -391,6 +434,121 @@ button.primary:hover {
 #coordinateText {
   flex: none;
   font-variant-numeric: tabular-nums;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.modal {
+  min-width: 248px;
+  padding: 14px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.44);
+}
+
+.modal-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.modal-hint {
+  margin-bottom: 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.modal-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 30px;
+  padding: 3px 0;
+}
+
+.modal-group + .modal-group {
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.modal-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.modal-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.modal select {
+  min-width: 74px;
+  height: 24px;
+  padding: 1px 4px;
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 2px;
+  font: inherit;
+}
+
+.modal select:disabled {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  cursor: default;
+  opacity: 0.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 45;
+  min-width: 156px;
+  padding: 3px;
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border, var(--vscode-panel-border)));
+  border-radius: 4px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.42);
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 5px 10px;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+  outline: none;
 }
 
 @media (max-width: 720px) {

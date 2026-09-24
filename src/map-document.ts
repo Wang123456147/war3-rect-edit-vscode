@@ -5,6 +5,9 @@ import War3MapDoo from 'mdx-m3-viewer/dist/cjs/parsers/w3x/doo/file';
 import { parseW3e } from './formats/w3e';
 import { parseW3r, writeW3r } from './formats/w3r';
 import type {
+  InstanceFileData,
+  InstanceLinkData,
+  InstanceMirrorAxis,
   MapDocumentData,
   PointFileData,
   RegionFileData,
@@ -18,17 +21,30 @@ const UNIT_RELATIVE_PATH = path.join('map', 'war3mapUnits.doo');
 const DOODAD_INI_RELATIVE_PATH = path.join('table', 'doodad.ini');
 const TOOL_DIRECTORY = '.war3tool';
 const POINTS_FILENAME = 'points.json';
+const INSTANCES_FILENAME = 'instances.json';
 const POINTS_LUA_FILENAME = 'points.lua';
 const W3R_BACKUP_FILENAME = 'war3map.w3r.before-war3-map-tools.bak';
+export const DEFAULT_LUA_EXPORT_PATH = `${TOOL_DIRECTORY}/${POINTS_LUA_FILENAME}`;
 
 export class MapDocument {
   private w3rHash = '';
+  private configuredLuaExportPath: string;
+  private readonly workspaceRoot: string;
 
   public constructor(
     public readonly root: string,
     private readonly encoding: string,
-    private readonly configuredLuaExportPath = path.join(TOOL_DIRECTORY, POINTS_LUA_FILENAME)
-  ) {}
+    configuredLuaExportPath = DEFAULT_LUA_EXPORT_PATH,
+    workspaceRoot = root
+  ) {
+    this.configuredLuaExportPath = configuredLuaExportPath;
+    this.workspaceRoot = workspaceRoot;
+  }
+
+  /** Update the destination without recreating the loaded map document. */
+  public setLuaExportPath(configuredPath: string): void {
+    this.configuredLuaExportPath = configuredPath;
+  }
 
   public static async isMapRoot(candidate: string): Promise<boolean> {
     return Promise.all([
@@ -47,11 +63,13 @@ export class MapDocument {
       readOptionalText(path.join(this.root, DOODAD_INI_RELATIVE_PATH))
     ]);
     this.w3rHash = hashBuffer(w3rBuffer);
+    const regionFile = parseW3r(w3rBuffer, this.encoding);
     return {
       mapRoot: this.root,
       terrain: parseW3e(w3eBuffer),
-      regionFile: parseW3r(w3rBuffer, this.encoding),
+      regionFile,
       points,
+      instanceLinks: await this.readInstanceLinks(points, regionFile),
       warcraftPath,
       mapFiles: [
         { name: 'war3map.w3e', base64: w3eBuffer.toString('base64') },
@@ -63,7 +81,11 @@ export class MapDocument {
     };
   }
 
-  public async save(regionFile: RegionFileData, points: ScriptPoint[]): Promise<void> {
+  public async save(
+    regionFile: RegionFileData,
+    points: ScriptPoint[],
+    instanceLinks: InstanceLinkData[] = []
+  ): Promise<void> {
     validatePoints(points);
     const currentW3r = await fs.readFile(this.w3rPath);
     const currentHash = hashBuffer(currentW3r);
@@ -88,6 +110,19 @@ export class MapDocument {
 
     const pointFile: PointFileData = { version: 1, points };
     await fs.writeFile(this.pointsPath, `${JSON.stringify(pointFile, null, 2)}\n`, 'utf8');
+    // Instance links live in their own sidecar so points.json, points.lua and
+    // war3map.w3r never carry editor bookkeeping. Written last because it is
+    // derived data: a failure here must not leave the map half-saved. The
+    // reader and the writer share one sanitizer, so what lands on disk can
+    // never hold a dangling or ambiguous link, and an empty link set removes
+    // the file instead of leaving `{"version":1,"links":[]}` behind.
+    const links = sanitizeInstanceLinks(instanceLinks, points, regionFile);
+    if (links.length === 0) {
+      await fs.rm(this.instancePath, { force: true });
+    } else {
+      const instanceFile: InstanceFileData = { version: 1, links };
+      await fs.writeFile(this.instancePath, `${JSON.stringify(instanceFile, null, 2)}\n`, 'utf8');
+    }
     this.w3rHash = hashBuffer(nextW3r);
   }
 
@@ -116,34 +151,89 @@ export class MapDocument {
     return path.join(this.toolDirectory, POINTS_FILENAME);
   }
 
+  public get instancePath(): string {
+    return path.join(this.toolDirectory, INSTANCES_FILENAME);
+  }
+
   public get pointsLuaPath(): string {
     const configured = this.configuredLuaExportPath.trim();
-    if (configured.length === 0) {
+    if (configured.length === 0 || isDefaultLuaExportPath(configured)) {
       return path.join(this.toolDirectory, POINTS_LUA_FILENAME);
     }
     return path.isAbsolute(configured) ? path.normalize(configured) : path.resolve(this.root, configured);
   }
 
   private get toolDirectory(): string {
-    return path.join(this.root, TOOL_DIRECTORY);
+    return path.join(this.workspaceRoot, TOOL_DIRECTORY);
+  }
+
+  private get legacyPointsPath(): string {
+    return path.join(this.root, TOOL_DIRECTORY, POINTS_FILENAME);
   }
 
   private async readPoints(): Promise<ScriptPoint[]> {
-    try {
-      const text = await fs.readFile(this.pointsPath, 'utf8');
-      const data = JSON.parse(text) as Partial<PointFileData>;
-      if (data.version !== 1 || !Array.isArray(data.points)) {
-        throw new Error('Unsupported points.json schema.');
+    const candidates = [this.pointsPath];
+    if (path.resolve(this.pointsPath).toLowerCase() !== path.resolve(this.legacyPointsPath).toLowerCase()) {
+      candidates.push(this.legacyPointsPath);
+    }
+    for (const filename of candidates) {
+      try {
+        const text = await fs.readFile(filename, 'utf8');
+        const data = JSON.parse(text) as Partial<PointFileData>;
+        if (data.version !== 1 || !Array.isArray(data.points)) {
+          throw new Error('Unsupported points.json schema.');
+        }
+        validatePoints(data.points);
+        return data.points;
+      } catch (error) {
+        if (isMissingFile(error)) {
+          continue;
+        }
+        throw error;
       }
-      validatePoints(data.points);
-      return data.points;
+    }
+    return [];
+  }
+
+  /**
+   * Reads the instance sidecar and drops anything that no longer resolves.
+   * A missing file simply means "no links yet"; a malformed one is reported
+   * instead of silently discarding the user's work.
+   *
+   * Positions are deliberately absent from the file, so links survive an
+   * external program rewriting the W3R or points.json as long as the entities
+   * themselves are still there. When one side is gone the link is stale and
+   * gets pruned instead of resurrecting a deleted object.
+   */
+  private async readInstanceLinks(
+    points: ScriptPoint[],
+    regionFile: RegionFileData
+  ): Promise<InstanceLinkData[]> {
+    let text: string;
+    try {
+      text = await fs.readFile(this.instancePath, 'utf8');
     } catch (error) {
       if (isMissingFile(error)) {
         return [];
       }
       throw error;
     }
+
+    let data: Partial<InstanceFileData>;
+    try {
+      data = JSON.parse(text) as Partial<InstanceFileData>;
+    } catch {
+      throw new Error('instances.json 不是有效的 JSON，无法读取实例关联。');
+    }
+    if (data.version !== 1 || !Array.isArray(data.links)) {
+      throw new Error('instances.json 格式不支持：需要 version 为 1，且 links 为数组。');
+    }
+    return sanitizeInstanceLinks(data.links, points, regionFile);
   }
+}
+
+function isDefaultLuaExportPath(configuredPath: string): boolean {
+  return path.normalize(configuredPath).toLowerCase() === path.normalize(DEFAULT_LUA_EXPORT_PATH).toLowerCase();
 }
 
 function countDoodadPlacements(buffer: Buffer | undefined): number {
@@ -210,6 +300,57 @@ function validatePoints(points: ScriptPoint[]): void {
     ids.add(point.id);
     names.add(point.name);
   }
+}
+
+/** Narrows one raw JSON entry; anything malformed is skipped by the caller. */
+function normalizeInstanceLink(value: unknown): InstanceLinkData | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const { source, target, axis } = record;
+  if (typeof source !== 'string' || typeof target !== 'string') {
+    return undefined;
+  }
+  // A hand-written entry with a missing or mistyped axis means "no mirroring".
+  const mirror: InstanceMirrorAxis = axis === 'horizontal' || axis === 'vertical' ? axis : 'none';
+  return { source, target, axis: mirror };
+}
+
+/**
+ * Shared by the reader and the writer so both sides agree on what a link is:
+ * well-shaped, not self-referential, still resolvable on both ends, and with at
+ * most one source claiming any copy. Everything else is dropped, which is what
+ * keeps stale links out of the file and out of memory alike.
+ */
+function sanitizeInstanceLinks(
+  raw: readonly unknown[],
+  points: ScriptPoint[],
+  regionFile: RegionFileData
+): InstanceLinkData[] {
+  // `region:<index>` and `point:<id>` mirror the keys the editor uses.
+  const known = new Set<string>([
+    ...points.map((point) => `point:${point.id}`),
+    ...regionFile.regions.map((region) => `region:${region.index}`)
+  ]);
+  const links: InstanceLinkData[] = [];
+  const claimedTargets = new Set<string>();
+  for (const entry of raw) {
+    const link = normalizeInstanceLink(entry);
+    if (link === undefined || link.source === link.target) {
+      continue;
+    }
+    if (!known.has(link.source) || !known.has(link.target)) {
+      continue;
+    }
+    // A copy answers to exactly one source; this also de-duplicates entries.
+    if (claimedTargets.has(link.target)) {
+      continue;
+    }
+    claimedTargets.add(link.target);
+    links.push(link);
+  }
+  return links;
 }
 
 function luaKey(name: string): string {

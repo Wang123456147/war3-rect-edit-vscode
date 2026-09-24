@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { RegionFileData, ScriptPoint } from './shared/model';
-import { MapDocument } from './map-document';
+import type { InstanceLinkData, RegionFileData, ScriptPoint } from './shared/model';
+import { DEFAULT_LUA_EXPORT_PATH, MapDocument } from './map-document';
 import { WarcraftResourceResolver } from './resources/resource-resolver';
 
 interface SaveMessage {
@@ -8,6 +8,7 @@ interface SaveMessage {
   revision: number;
   regionFile: RegionFileData;
   points: ScriptPoint[];
+  instanceLinks: InstanceLinkData[];
 }
 
 interface ExportLuaMessage {
@@ -33,7 +34,8 @@ export class TerrainPanel {
     private readonly panel: vscode.WebviewPanel,
     private readonly extensionUri: vscode.Uri,
     private readonly document: MapDocument,
-    private readonly warcraftPath: string
+    private readonly warcraftPath: string,
+    private readonly configurationUri: vscode.Uri
   ) {
     this.resources = new WarcraftResourceResolver(document.root, warcraftPath);
     this.panel.webview.html = this.html(this.panel.webview);
@@ -43,12 +45,20 @@ export class TerrainPanel {
       undefined,
       this.disposables
     );
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('war3MapTools.luaExportPath', this.configurationUri)) {
+          this.refreshLuaExportPath();
+        }
+      })
+    );
   }
 
   public static async show(
     extensionUri: vscode.Uri,
     document: MapDocument,
-    warcraftPath: string
+    warcraftPath: string,
+    configurationUri: vscode.Uri = vscode.Uri.file(document.root)
   ): Promise<void> {
     if (TerrainPanel.current !== undefined) {
       TerrainPanel.current.panel.dispose();
@@ -66,14 +76,21 @@ export class TerrainPanel {
         ]
       }
     );
-    TerrainPanel.current = new TerrainPanel(panel, extensionUri, document, warcraftPath);
+    TerrainPanel.current = new TerrainPanel(
+      panel,
+      extensionUri,
+      document,
+      warcraftPath,
+      configurationUri
+    );
   }
 
   public static resolve(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
     document: MapDocument,
-    warcraftPath: string
+    warcraftPath: string,
+    configurationUri: vscode.Uri = vscode.Uri.file(document.root)
   ): void {
     if (TerrainPanel.current !== undefined && TerrainPanel.current.panel !== panel) {
       TerrainPanel.current.panel.dispose();
@@ -86,7 +103,13 @@ export class TerrainPanel {
         vscode.Uri.joinPath(extensionUri, 'media')
       ]
     };
-    TerrainPanel.current = new TerrainPanel(panel, extensionUri, document, warcraftPath);
+    TerrainPanel.current = new TerrainPanel(
+      panel,
+      extensionUri,
+      document,
+      warcraftPath,
+      configurationUri
+    );
   }
 
   private async receive(message: WebviewMessage): Promise<void> {
@@ -101,11 +124,12 @@ export class TerrainPanel {
           break;
         }
         case 'save': {
-          await this.document.save(message.regionFile, message.points);
+          await this.document.save(message.regionFile, message.points, message.instanceLinks);
           await this.postMessage({ type: 'saved', revision: message.revision });
           break;
         }
         case 'exportLua': {
+          this.refreshLuaExportPath();
           const output = await this.document.exportPointsLua(message.points);
           if (!await this.postMessage({ type: 'luaExported', output })) {
             return;
@@ -169,6 +193,16 @@ export class TerrainPanel {
     void this.resources.close();
   }
 
+  private refreshLuaExportPath(): void {
+    const configuration = vscode.workspace.getConfiguration(
+      'war3MapTools',
+      this.configurationUri
+    );
+    this.document.setLuaExportPath(
+      configuration.get<string>('luaExportPath', DEFAULT_LUA_EXPORT_PATH)
+    );
+  }
+
   private html(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'styles.css'));
@@ -207,26 +241,38 @@ export class TerrainPanel {
         </div>
         <section id="regionPanelHeader" class="region-panel-header">
           <div class="current-region">矩形区域：<strong id="currentRegionName">没有</strong></div>
-          <button
-            id="regionToolButton"
-            class="region-tool-button"
-            type="button"
-            title="新建矩形区域（Space 切换新建/编辑）"
-            aria-label="切换新建矩形区域状态"
-            aria-pressed="false"
-          ><span class="region-tool-icon" aria-hidden="true"></span></button>
+          <div class="tool-settings-row">
+            <button
+              id="regionToolButton"
+              class="region-tool-button"
+              type="button"
+              title="新建矩形区域（Space 切换新建/编辑）"
+              aria-label="切换新建矩形区域状态"
+              aria-pressed="false"
+            ><span class="region-tool-icon" aria-hidden="true"></span></button>
+            <div class="snap-settings">
+              <label title="拖动点和区域时启用吸附"><input id="regionSnapEnabledInput" type="checkbox" checked>吸附</label>
+              <label title="吸附距离（码）"><span>距离</span><input id="regionSnapDistanceInput" type="number" min="1" max="500" step="1" value="50"><span>码</span></label>
+            </div>
+          </div>
           <div class="region-list-heading">矩形区域 <span id="regionCount">0</span></div>
         </section>
         <section id="pointPanelHeader" class="region-panel-header" hidden>
           <div class="current-region">逻辑点：<strong id="currentPointName">没有</strong></div>
-          <button
-            id="pointToolButton"
-            class="region-tool-button"
-            type="button"
-            title="新建逻辑点"
-            aria-label="切换新建逻辑点状态"
-            aria-pressed="false"
-          ><span class="point-tool-icon" aria-hidden="true"></span></button>
+          <div class="tool-settings-row">
+            <button
+              id="pointToolButton"
+              class="region-tool-button"
+              type="button"
+              title="新建逻辑点"
+              aria-label="切换新建逻辑点状态"
+              aria-pressed="false"
+            ><span class="point-tool-icon" aria-hidden="true"></span></button>
+            <div class="snap-settings">
+              <label title="拖动点和区域时启用吸附"><input id="pointSnapEnabledInput" type="checkbox" checked>吸附</label>
+              <label title="吸附距离（码）"><span>距离</span><input id="pointSnapDistanceInput" type="number" min="1" max="500" step="1" value="50"><span>码</span></label>
+            </div>
+          </div>
           <div class="region-list-heading">逻辑点 <span id="pointListCount">0</span></div>
         </section>
         <div id="itemList" class="item-list"></div>
@@ -254,6 +300,37 @@ export class TerrainPanel {
       <span id="coordinateText"></span>
     </footer>
   </div>
+  <div id="pasteDialog" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pasteDialogTitle">
+      <div id="pasteDialogTitle" class="modal-title">粘贴方式</div>
+      <div id="pasteDialogHint" class="modal-hint"></div>
+      <div class="modal-group">
+        <label class="modal-option" title="粘贴出的对象与源对象保持联动，移动时会一起移动">
+          <input id="pasteModeInstanceInput" type="radio" name="pasteMode" value="instance" checked>
+          <span>实例</span>
+        </label>
+        <label class="modal-option" title="粘贴出的对象与源对象完全独立">
+          <input id="pasteModeNormalInput" type="radio" name="pasteMode" value="normal">
+          <span>普通</span>
+        </label>
+      </div>
+      <div class="modal-group">
+        <label class="modal-option" title="按左右或上下翻转粘贴出的对象">
+          <input id="pasteMirrorInput" type="checkbox">
+          <span>镜像</span>
+        </label>
+        <select id="pasteMirrorAxisInput" disabled title="镜像方向">
+          <option value="horizontal" selected>左右</option>
+          <option value="vertical">上下</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button id="pasteCancelButton" type="button">取消</button>
+        <button id="pasteConfirmButton" type="button" class="primary">确定</button>
+      </div>
+    </div>
+  </div>
+  <div id="contextMenu" class="context-menu" role="menu" hidden></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

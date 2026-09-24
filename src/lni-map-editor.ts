@@ -46,8 +46,13 @@ export class LniMapEditorProvider implements vscode.CustomReadonlyEditorProvider
     TerrainPanel.resolve(
       webviewPanel,
       this.extensionUri,
-      new MapDocument(root, encoding, luaExportPath),
-      warcraftPath
+      new MapDocument(root, encoding, luaExportPath, workspaceRootFor(marker.uri)),
+      warcraftPath,
+      marker.uri
     );
   }
+}
+
+function workspaceRootFor(mapMarker: vscode.Uri): string {
+  return vscode.workspace.getWorkspaceFolder(mapMarker)?.uri.fsPath ?? path.dirname(mapMarker.fsPath);
 }
